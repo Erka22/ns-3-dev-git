@@ -192,6 +192,10 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      */
     int64_t AssignStreams(int64_t stream);
 
+    // Add these methods
+    void SetCongestionThreshold (uint32_t threshold) { m_congestionThreshold = threshold; }
+    uint32_t GetCongestionThreshold () const { return m_congestionThreshold; }
+
   protected:
     void DoInitialize() override;
 
@@ -279,6 +283,12 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     uint16_t m_rreqCount;
     /// Number of RERRs used for RERR rate control
     uint16_t m_rerrCount;
+
+    // Add these members
+    uint32_t m_congestionThreshold;
+    uint32_t m_receivedPackets;
+    std::map<Ipv4Address, bool> m_blockedDestinations;
+  
 
   private:
     /// Start protocol operation
@@ -492,6 +502,11 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     Ptr<UniformRandomVariable> m_uniformRandomVariable;
     /// Keep track of the last bcast time
     Time m_lastBcastTime;
+
+      // Add these methods
+    void SendCongestionMessage ();
+    void RecvCongestion (Ptr<Packet> p, Ipv4Address receiver, Ipv4Address sender);
+
 };
 
 } // namespace aodv
