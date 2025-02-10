@@ -2291,6 +2291,62 @@ RoutingProtocol::DoInitialize()
     }
     Ipv4RoutingProtocol::DoInitialize();
 }
+//Added methods for Congestion
+void
+RoutingProtocol::SendCongestionMessage ()
+{
+  // Create AODV header
+  TypeHeader tHeader (AODVTYPE_CONGESTION);
+  Ptr<Packet> packet = Create<Packet> ();
+  packet->AddHeader (tHeader);
+  
+  // Add congestion information
+  CongestionHeader congHeader;
+  congHeader.SetOriginAddress (m_ipv4->GetAddress (1, 0).GetLocal ());
+  congHeader.SetPacketCount (m_receivedPackets);
+  congHeader.SetThreshold (m_congestionThreshold);
+  packet->AddHeader (congHeader);
+  
+  // Send to all neighbors
+  for (std::map<Ipv4Address, RoutingTableEntry>::const_iterator i =
+       m_routingTable.begin (); i != m_routingTable.end (); ++i)
+  {
+    Ptr<Socket> socket = FindSocketWithInterfaceAddress (i->second.GetInterface ());
+    if (!socket)
+      {
+        continue;
+      }
+    
+    NS_LOG_LOGIC ("Broadcasting congestion message to " << i->first);
+    socket->SendTo (packet, 0, InetSocketAddress (i->first, AODV_PORT));
+  }
+}
+
+void
+RoutingProtocol::RecvCongestion (Ptr<Packet> p, Ipv4Address receiver, Ipv4Address sender)
+{
+  NS_LOG_FUNCTION (this << " src " << sender);
+  
+  CongestionHeader congHeader;
+  p->RemoveHeader (congHeader);
+  
+  // Mark destination as congested
+  m_blockedDestinations[congHeader.GetOriginAddress ()] = true;
+  
+  // Schedule unblock after timeout
+  Simulator::Schedule (Seconds (30), &RoutingProtocol::UnblockDestination, 
+                      this, congHeader.GetOriginAddress ());
+                      
+  NS_LOG_LOGIC ("Received congestion notification from " << sender << 
+                " for destination " << congHeader.GetOriginAddress ());
+}
+
+void
+RoutingProtocol::UnblockDestination (Ipv4Address destination)
+{
+  m_blockedDestinations[destination] = false;
+  NS_LOG_LOGIC ("Unblocked destination " << destination);
+}
 
 } // namespace aodv
 } // namespace ns3
