@@ -104,6 +104,10 @@ TypeHeader::Print(std::ostream& os) const
         os << "RREP_ACK";
         break;
     }
+    case AODVTYPE_CONGESTION: {
+      os << "CONGESTION";
+      break;
+    }
     default:
         os << "UNKNOWN_TYPE";
     }
@@ -666,5 +670,81 @@ operator<<(std::ostream& os, const RerrHeader& h)
     h.Print(os);
     return os;
 }
+
+//-----------------------------------------------------------------------------
+// Congestion
+//-----------------------------------------------------------------------------
+NS_OBJECT_ENSURE_REGISTERED (CongestionHeader);
+
+CongestionHeader::CongestionHeader ()
+  : m_packetCount (0),
+    m_threshold (0),
+    m_timestamp (0)
+{
+}
+
+TypeId
+CongestionHeader::GetTypeId ()
+{
+  static TypeId tid = TypeId ("ns3::aodv::CongestionHeader")
+                            .SetParent<Header> ()
+                            .SetGroupName ("Aodv")
+                            .AddConstructor<CongestionHeader> ();
+  return tid;
+}
+
+TypeId
+CongestionHeader::GetInstanceTypeId () const
+{
+  return GetTypeId ();
+}
+
+uint32_t
+CongestionHeader::GetSerializedSize () const
+{
+  // 2 IPv4 addresses (8 bytes each) + 2 uint32_t + 1 uint64_t
+  return 8 + 8 + 4 + 4 + 8;
+}
+
+void
+CongestionHeader::Serialize (Buffer::Iterator i) const
+{
+  WriteTo (i, m_congestedNode);
+  WriteTo (i, m_sourceNode);
+  i.WriteHtonU32 (m_packetCount);
+  i.WriteHtonU32 (m_threshold);
+  i.WriteHtonU64 (m_timestamp);
+}
+
+uint32_t
+CongestionHeader::Deserialize (Buffer::Iterator i)
+{
+  ReadFrom (i, m_congestedNode);
+  ReadFrom (i, m_sourceNode);
+  m_packetCount = i.ReadNtohU32 ();
+  m_threshold = i.ReadNtohU32 ();
+  m_timestamp = i.ReadNtohU64 ();
+
+  return GetSerializedSize ();
+}
+
+void
+CongestionHeader::Print (std::ostream &os) const
+{
+  os << "CongestionHeader Congested: " << m_congestedNode
+     << " Source: " << m_sourceNode
+     << " PacketCount: " << m_packetCount
+     << " Threshold: " << m_threshold
+     << " Timestamp: " << Time (NanoSeconds (m_timestamp)).GetSeconds () << "s";
+}
+
+std::ostream&
+operator<<(std::ostream& os, const CongestionHeader& h)
+{
+    h.Print(os);
+    return os;
+}
+
+
 } // namespace aodv
 } // namespace ns3
