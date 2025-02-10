@@ -327,10 +327,10 @@ RoutingProtocol::GetTypeId()
                           MakePointerAccessor(&RoutingProtocol::m_uniformRandomVariable),
                           MakePointerChecker<UniformRandomVariable>())
             .AddAttribute ("CongestionThreshold",
-                  "Threshold for received packets before triggering congestion control",
-                  UintegerValue (1000),
-                  MakeUintegerAccessor (&RoutingProtocol::m_congestionThreshold),
-                  MakeUintegerChecker<uint32_t> ());
+                        "Threshold for received packets before triggering congestion control",
+                        UintegerValue (1000),
+                        MakeUintegerAccessor (&RoutingProtocol::m_congestionThreshold),
+                        MakeUintegerChecker<uint32_t> ());
     return tid;
 }
 
@@ -1247,6 +1247,10 @@ RoutingProtocol::RecvAodv(Ptr<Socket> socket)
     }
     case AODVTYPE_RREP_ACK: {
         RecvReplyAck(sender);
+        break;
+    }
+    case AODVTYPE_CONGESTION: {
+        RecvCongestion (packet, receiver, sender);
         break;
     }
     }
