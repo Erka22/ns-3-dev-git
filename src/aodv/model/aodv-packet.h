@@ -700,6 +700,12 @@ private:
   uint64_t m_timestamp;          ///< Time of congestion detection
 };
 
+/**
+ * @brief Stream output operator
+ * @param os output stream
+ * @return updated stream
+ */
+std::ostream& operator<<(std::ostream& os, const CongestionHeader&);
 
 } // namespace aodv
 } // namespace ns3
