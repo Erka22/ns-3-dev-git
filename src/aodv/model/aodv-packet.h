@@ -39,6 +39,7 @@ enum MessageType
     AODVTYPE_RREP = 2,    //!< AODVTYPE_RREP
     AODVTYPE_RERR = 3,    //!< AODVTYPE_RERR
     AODVTYPE_RREP_ACK = 4 //!< AODVTYPE_RREP_ACK
+    AODVTYPE_CONGESTION = 5  // Add new type
 };
 
 /**
