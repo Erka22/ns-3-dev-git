@@ -325,7 +325,12 @@ RoutingProtocol::GetTypeId()
                           "Access to the underlying UniformRandomVariable",
                           StringValue("ns3::UniformRandomVariable"),
                           MakePointerAccessor(&RoutingProtocol::m_uniformRandomVariable),
-                          MakePointerChecker<UniformRandomVariable>());
+                          MakePointerChecker<UniformRandomVariable>())
+            .AddAttribute ("CongestionThreshold",
+                  "Threshold for received packets before triggering congestion control",
+                  UintegerValue (1000),
+                  MakeUintegerAccessor (&RoutingProtocol::m_congestionThreshold),
+                  MakeUintegerChecker<uint32_t> ());
     return tid;
 }
 
