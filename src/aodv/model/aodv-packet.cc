@@ -70,7 +70,8 @@ TypeHeader::Deserialize(Buffer::Iterator start)
     case AODVTYPE_RREQ:
     case AODVTYPE_RREP:
     case AODVTYPE_RERR:
-    case AODVTYPE_RREP_ACK: {
+    case AODVTYPE_RREP_ACK:
+    case AODVTYPE_CONGESTION: {
         m_type = (MessageType)type;
         break;
     }
