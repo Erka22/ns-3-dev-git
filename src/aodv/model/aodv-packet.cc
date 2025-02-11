@@ -710,7 +710,6 @@ void
 CongestionHeader::Serialize (Buffer::Iterator i) const
 {
   WriteTo (i, m_congestedNode);
-  WriteTo (i, m_sourceNode);
   i.WriteHtonU32 (m_packetCount);
   i.WriteHtonU32 (m_threshold);
   i.WriteHtonU64 (m_timestamp);
@@ -720,7 +719,6 @@ uint32_t
 CongestionHeader::Deserialize (Buffer::Iterator i)
 {
   ReadFrom (i, m_congestedNode);
-  ReadFrom (i, m_sourceNode);
   m_packetCount = i.ReadNtohU32 ();
   m_threshold = i.ReadNtohU32 ();
   m_timestamp = i.ReadNtohU64 ();
@@ -732,7 +730,6 @@ void
 CongestionHeader::Print (std::ostream &os) const
 {
   os << "CongestionHeader Congested: " << m_congestedNode
-     << " Source: " << m_sourceNode
      << " PacketCount: " << m_packetCount
      << " Threshold: " << m_threshold
      << " Timestamp: " << Time (NanoSeconds (m_timestamp)).GetSeconds () << "s";
