@@ -193,8 +193,9 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     int64_t AssignStreams(int64_t stream);
 
     // Add these methods
-    void SetCongestionThreshold (uint32_t threshold) { m_congestionThreshold = threshold; }
-    uint32_t GetCongestionThreshold () const { return m_congestionThreshold; }
+    void SetCongestionThreshold(uint32_t threshold) { m_congestionThreshold = threshold; }
+    uint32_t GetCongestionThreshold() const { return m_congestionThreshold; }
+    void SetBlockTimeout(Time timeout) { m_blockTimeout = timeout; }
 
   protected:
     void DoInitialize() override;
@@ -286,8 +287,9 @@ class RoutingProtocol : public Ipv4RoutingProtocol
 
     // Add these members
     uint32_t m_congestionThreshold;
-    uint32_t m_receivedPackets;
+    std::map<Ipv4Address, uint32_t> m_receivedPackets;
     std::map<Ipv4Address, bool> m_blockedDestinations;
+    Time m_blockTimeout;
   
 
   private:
@@ -503,9 +505,32 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     /// Keep track of the last bcast time
     Time m_lastBcastTime;
 
-      // Add these methods
-    void SendCongestionMessage ();
-    void RecvCongestion (Ptr<Packet> p, Ipv4Address receiver, Ipv4Address sender);
+
+    // Destination information
+    struct DestinationInfo {
+        Ipv4Address address;
+        uint32_t hopCount;
+        Time routeLifetime;
+        bool isCongested;
+        
+        DestinationInfo() 
+            : hopCount(0), isCongested(false) {}
+    };
+    std::map<Ipv4Address, DestinationInfo> m_destinationInfo;
+
+    // Congestion control methods
+    void HandleCongestion(Ipv4Address dest);
+    void SendCongestionMessage(Ipv4Address congestedNode);
+    void ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender);
+    bool IsDestinationCongested(Ipv4Address dest) const;
+    void BlockDestination(Ipv4Address dest);
+    void UnblockDestination(Ipv4Address dest);
+    void ScheduleUnblock(Ipv4Address dest);
+
+    // Path selection methods
+    Ipv4Address SelectBestDestination(const std::vector<Ipv4Address>& destinations);
+    void UpdateDestinationInfo(Ipv4Address dest, uint32_t hopCount, Time lifetime);
+    double CalculateRouteQuality(Ipv4Address dest) const;
 
 };
 
