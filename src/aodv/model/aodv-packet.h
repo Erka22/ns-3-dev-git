@@ -680,21 +680,18 @@ public:
 
   // Setters
   void SetCongestedNode (Ipv4Address node) { m_congestedNode = node; }
-  void SetSourceNode (Ipv4Address source) { m_sourceNode = source; }
   void SetPacketCount (uint32_t count) { m_packetCount = count; }
   void SetThreshold (uint32_t threshold) { m_threshold = threshold; }
   void SetTimestamp (Time time) { m_timestamp = time.GetNanoSeconds (); }
 
   // Getters
   Ipv4Address GetCongestedNode () const { return m_congestedNode; }
-  Ipv4Address GetSourceNode () const { return m_sourceNode; }
   uint32_t GetPacketCount () const { return m_packetCount; }
   uint32_t GetThreshold () const { return m_threshold; }
   Time GetTimestamp () const { return Time (NanoSeconds (m_timestamp)); }
 
 private:
   Ipv4Address m_congestedNode;   ///< Congested destination node
-  Ipv4Address m_sourceNode;      ///< Source node to stop
   uint32_t m_packetCount;        ///< Current packet count
   uint32_t m_threshold;          ///< Threshold value
   uint64_t m_timestamp;          ///< Time of congestion detection
