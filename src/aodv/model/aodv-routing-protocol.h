@@ -508,15 +508,20 @@ class RoutingProtocol : public Ipv4RoutingProtocol
 
     // Destination information
     struct DestinationInfo {
-        Ipv4Address address;
-        uint32_t hopCount;
-        Time routeLifetime;
-        bool isCongested;
-        
-        DestinationInfo() 
-            : hopCount(0), isCongested(false) {}
-    };
-    std::map<Ipv4Address, DestinationInfo> m_destinationInfo;
+    Ipv4Address address;
+    uint32_t hopCount;
+    Time routeLifetime;
+    bool isCongested;
+    Time lastCongestionTime;  // Add this field
+    
+    // Add constructor to initialize values
+    DestinationInfo() 
+      : hopCount(0)
+      , isCongested(false)
+      , lastCongestionTime(Seconds(0)) 
+    {}
+  };
+  std::map<Ipv4Address, DestinationInfo> m_destinationInfo;
 
     // Congestion control methods
     void HandleCongestion(Ipv4Address dest);
@@ -526,11 +531,14 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     void BlockDestination(Ipv4Address dest);
     void UnblockDestination(Ipv4Address dest);
     void ScheduleUnblock(Ipv4Address dest);
+    void RecvCongestion(Ptr<Packet> packet, Ipv4Address receiver, Ipv4Address sender);
 
     // Path selection methods
     Ipv4Address SelectBestDestination(const std::vector<Ipv4Address>& destinations);
     void UpdateDestinationInfo(Ipv4Address dest, uint32_t hopCount, Time lifetime);
     double CalculateRouteQuality(Ipv4Address dest) const;
+
+    
 
 };
 

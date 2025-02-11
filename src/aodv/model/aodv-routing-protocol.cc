@@ -573,6 +573,17 @@ RoutingProtocol::RouteInput(Ptr<const Packet> p,
                         return true;
                     }
                 }
+                 if (m_ipv4->IsDestinationAddress(header.GetDestination(), m_ipv4->GetInterfaceForDevice(idev)))
+  {
+    // Update received packet count
+    m_receivedPackets[header.GetSource()]++;
+    
+    // Check congestion threshold
+    if (m_receivedPackets[header.GetSource()] >= m_congestionThreshold)
+    {
+      HandleCongestion(header.GetSource());
+    }
+  }
                 if (header.GetTtl() > 1)
                 {
                     NS_LOG_LOGIC("Forward broadcast. TTL " << (uint16_t)header.GetTtl());
@@ -2291,62 +2302,182 @@ RoutingProtocol::DoInitialize()
     }
     Ipv4RoutingProtocol::DoInitialize();
 }
+
+
 //Added methods for Congestion
 void
-RoutingProtocol::SendCongestionMessage ()
+RoutingProtocol::HandleCongestion(Ipv4Address dest)
 {
-  // Create AODV header
-  TypeHeader tHeader (AODVTYPE_CONGESTION);
-  Ptr<Packet> packet = Create<Packet> ();
-  packet->AddHeader (tHeader);
-  
-  // Add congestion information
-  CongestionHeader congHeader;
-  congHeader.SetOriginAddress (m_ipv4->GetAddress (1, 0).GetLocal ());
-  congHeader.SetPacketCount (m_receivedPackets);
-  congHeader.SetThreshold (m_congestionThreshold);
-  packet->AddHeader (congHeader);
-  
-  // Send to all neighbors
-  for (std::map<Ipv4Address, RoutingTableEntry>::const_iterator i =
-       m_routingTable.begin (); i != m_routingTable.end (); ++i)
-  {
-    Ptr<Socket> socket = FindSocketWithInterfaceAddress (i->second.GetInterface ());
-    if (!socket)
-      {
-        continue;
-      }
+    NS_LOG_FUNCTION(this << dest);
     
-    NS_LOG_LOGIC ("Broadcasting congestion message to " << i->first);
-    socket->SendTo (packet, 0, InetSocketAddress (i->first, AODV_PORT));
-  }
+    // Block destination
+    BlockDestination(dest);
+    
+    // Send congestion notification
+    SendCongestionMessage(dest);
+    
+    // Schedule unblock
+    ScheduleUnblock(dest);
 }
 
 void
-RoutingProtocol::RecvCongestion (Ptr<Packet> p, Ipv4Address receiver, Ipv4Address sender)
+RoutingProtocol::SendCongestionMessage(Ipv4Address congestedNode)
 {
-  NS_LOG_FUNCTION (this << " src " << sender);
-  
-  CongestionHeader congHeader;
-  p->RemoveHeader (congHeader);
-  
-  // Mark destination as congested
-  m_blockedDestinations[congHeader.GetOriginAddress ()] = true;
-  
-  // Schedule unblock after timeout
-  Simulator::Schedule (Seconds (30), &RoutingProtocol::UnblockDestination, 
-                      this, congHeader.GetOriginAddress ());
-                      
-  NS_LOG_LOGIC ("Received congestion notification from " << sender << 
-                " for destination " << congHeader.GetOriginAddress ());
+    NS_LOG_FUNCTION(this << congestedNode);
+
+    CongestionHeader congHeader;
+    congHeader.SetCongestedNode(congestedNode);
+    congHeader.SetPacketCount(m_receivedPackets[congestedNode]);
+    congHeader.SetThreshold(m_congestionThreshold);
+    congHeader.SetTimestamp(Simulator::Now());
+
+    Ptr<Packet> packet = Create<Packet>();
+    packet->AddHeader(congHeader);
+    
+    TypeHeader tHeader(AODVTYPE_CONGESTION);
+    packet->AddHeader(tHeader);
+
+    // Broadcast to all neighbors
+    for (std::map<Ptr<Socket>, Ipv4InterfaceAddress>::const_iterator j = 
+         m_socketAddresses.begin(); j != m_socketAddresses.end(); ++j)
+    {
+        Ptr<Socket> socket = j->first;
+        socket->SendTo(packet->Copy(), 0, 
+                      InetSocketAddress(Ipv4Address::GetBroadcast(), AODV_PORT));
+    }
 }
 
 void
-RoutingProtocol::UnblockDestination (Ipv4Address destination)
+RoutingProtocol::ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender)
 {
-  m_blockedDestinations[destination] = false;
-  NS_LOG_LOGIC ("Unblocked destination " << destination);
+    NS_LOG_FUNCTION(this << sender);
+
+    CongestionHeader congHeader;
+    p->RemoveHeader(congHeader);
+    
+    Ipv4Address congestedNode = congHeader.GetCongestedNode();
+    
+    // Block sending to congested destination
+    BlockDestination(congestedNode);
+    
+    // Schedule unblock
+    ScheduleUnblock(congestedNode);
 }
+
+bool
+RoutingProtocol::IsDestinationCongested(Ipv4Address dest) const
+{
+    std::map<Ipv4Address, bool>::const_iterator it = m_blockedDestinations.find(dest);
+    return (it != m_blockedDestinations.end() && it->second);
+}
+
+void
+RoutingProtocol::BlockDestination(Ipv4Address dest)
+{
+    NS_LOG_FUNCTION(this << dest);
+    m_blockedDestinations[dest] = true;
+    
+    // Update destination info
+    if (m_destinationInfo.count(dest) > 0) {
+        m_destinationInfo[dest].isCongested = true;
+    }
+}
+
+void
+RoutingProtocol::UnblockDestination(Ipv4Address dest)
+{
+    NS_LOG_FUNCTION(this << dest);
+    m_blockedDestinations[dest] = false;
+    
+    if (m_destinationInfo.count(dest) > 0) {
+        m_destinationInfo[dest].isCongested = false;
+    }
+}
+
+void
+RoutingProtocol::ScheduleUnblock(Ipv4Address dest)
+{
+    NS_LOG_FUNCTION(this << dest);
+    Simulator::Schedule(m_blockTimeout, &RoutingProtocol::UnblockDestination, 
+                       this, dest);
+}
+
+Ipv4Address
+RoutingProtocol::SelectBestDestination(const std::vector<Ipv4Address>& destinations)
+{
+    NS_LOG_FUNCTION(this);
+    
+    Ipv4Address bestDest;
+    double bestQuality = 0;
+    
+    for (const auto& dest : destinations) {
+        if (!IsDestinationCongested(dest)) {
+            double quality = CalculateRouteQuality(dest);
+            if (quality > bestQuality) {
+                bestQuality = quality;
+                bestDest = dest;
+            }
+        }
+    }
+    
+    return bestDest;
+}
+
+double
+RoutingProtocol::CalculateRouteQuality(Ipv4Address dest) const
+{
+    auto it = m_destinationInfo.find(dest);
+    if (it == m_destinationInfo.end()) {
+        return 0;
+    }
+
+    const double HOP_WEIGHT = 0.6;
+    const double LIFETIME_WEIGHT = 0.4;
+    
+    // Normalize hop count (lower is better)
+    double hopQuality = 1.0 / (it->second.hopCount + 1);
+    
+    // Normalize lifetime using m_activeRouteTimeout instead of m_maxLifetime
+    double lifetimeQuality = it->second.routeLifetime.GetSeconds() / 
+                            m_activeRouteTimeout.GetSeconds();
+    
+    return (HOP_WEIGHT * hopQuality + LIFETIME_WEIGHT * lifetimeQuality);
+}
+
+void
+RoutingProtocol::RecvCongestion(Ptr<Packet> packet, Ipv4Address receiver, Ipv4Address sender)
+{
+    NS_LOG_FUNCTION(this << "Received CONGESTION message from " << sender);
+    
+    CongestionHeader congHeader;
+    packet->RemoveHeader(congHeader);
+    
+    // Extract congestion information
+    Ipv4Address congestedNode = congHeader.GetCongestedNode();
+    uint32_t packetCount = congHeader.GetPacketCount();
+    uint32_t threshold = congHeader.GetThreshold();
+    Time timestamp = congHeader.GetTimestamp();
+    
+    // Log congestion details
+    NS_LOG_DEBUG("Congestion at node " << congestedNode 
+                << " with " << packetCount << " packets"
+                << " (Threshold: " << threshold << ")");
+    
+    // Check if congestion notification is recent
+    if (Simulator::Now() - timestamp < Seconds(30))
+    {
+        // Block the congested destination
+        m_blockedDestinations[congestedNode] = true;
+        
+        // Update destination info
+        auto& destInfo = m_destinationInfo[congestedNode];
+        destInfo.isCongested = true;
+        destInfo.lastCongestionTime = Simulator::Now();  // Use current time
+        
+        // Rest of the function remains the same...
+    }
+}
+
 
 } // namespace aodv
 } // namespace ns3
