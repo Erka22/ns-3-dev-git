@@ -58,12 +58,12 @@ private:
 };
 
 AodvCongestionExample::AodvCongestionExample()
-    : m_numNodes(2)
-    , m_numDestinations(1)
-    , m_packetSize(100)
+    : m_numNodes(25)
+    , m_numDestinations(4)
+    , m_packetSize(1000)
     , m_numPackets(100)
     , m_txRange(250.0)
-    , m_simTime(30.0)
+    , m_simTime(300.0)
 {
 }
 
