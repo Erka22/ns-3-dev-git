@@ -70,7 +70,9 @@ TypeHeader::Deserialize(Buffer::Iterator start)
     case AODVTYPE_RREQ:
     case AODVTYPE_RREP:
     case AODVTYPE_RERR:
-    case AODVTYPE_RREP_ACK: {
+    case AODVTYPE_RREP_ACK:
+    case AODVTYPE_CONGESTION:
+    {
         m_type = (MessageType)type;
         break;
     }
@@ -101,6 +103,10 @@ TypeHeader::Print(std::ostream& os) const
     }
     case AODVTYPE_RREP_ACK: {
         os << "RREP_ACK";
+        break;
+    }
+    case AODVTYPE_CONGESTION: {  // Add this block
+        os << "CONGESTION";
         break;
     }
     default:
@@ -665,5 +671,64 @@ operator<<(std::ostream& os, const RerrHeader& h)
     h.Print(os);
     return os;
 }
+
+//-----------------------------------------------------------------------------
+// Congestion Header Implementation
+//-----------------------------------------------------------------------------
+NS_OBJECT_ENSURE_REGISTERED(CongestionHeader);
+
+CongestionHeader::CongestionHeader()
+{
+}
+
+TypeId
+CongestionHeader::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::aodv::CongestionHeader")
+                           .SetParent<Header>()
+                           .SetGroupName("Aodv")
+                           .AddConstructor<CongestionHeader>();
+    return tid;
+}
+
+TypeId
+CongestionHeader::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+uint32_t
+CongestionHeader::GetSerializedSize() const
+{
+    // Just Ipv4Address size (4 bytes)
+    return sizeof(Ipv4Address);
+}
+
+void
+CongestionHeader::Serialize(Buffer::Iterator start) const
+{
+    WriteTo(start, m_congestedNode);
+}
+
+uint32_t
+CongestionHeader::Deserialize(Buffer::Iterator start)
+{
+    ReadFrom(start, m_congestedNode);
+    return GetSerializedSize();
+}
+
+void
+CongestionHeader::Print(std::ostream& os) const
+{
+    os << "CongestionHeader: Congested Node: " << m_congestedNode;
+}
+
+std::ostream&
+operator<<(std::ostream& os, const CongestionHeader& h)
+{
+    h.Print(os);
+    return os;
+}
+
 } // namespace aodv
 } // namespace ns3

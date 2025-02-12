@@ -38,7 +38,8 @@ enum MessageType
     AODVTYPE_RREQ = 1,    //!< AODVTYPE_RREQ
     AODVTYPE_RREP = 2,    //!< AODVTYPE_RREP
     AODVTYPE_RERR = 3,    //!< AODVTYPE_RERR
-    AODVTYPE_RREP_ACK = 4 //!< AODVTYPE_RREP_ACK
+    AODVTYPE_RREP_ACK = 4, //!< AODVTYPE_RREP_ACK
+    AODVTYPE_CONGESTION = 5  // Add this line
 };
 
 /**
@@ -652,6 +653,27 @@ class RerrHeader : public Header
  * @return updated stream
  */
 std::ostream& operator<<(std::ostream& os, const RerrHeader&);
+
+// Add a simple congestion header class
+class CongestionHeader : public Header
+{
+public:
+    CongestionHeader();
+    static TypeId GetTypeId();
+    virtual TypeId GetInstanceTypeId() const;
+    virtual uint32_t GetSerializedSize() const;
+    virtual void Serialize(Buffer::Iterator start) const;
+    virtual uint32_t Deserialize(Buffer::Iterator start);
+    virtual void Print(std::ostream &os) const;
+
+    // Simple setters and getters
+    void SetCongestedNode(Ipv4Address node) { m_congestedNode = node; }
+    Ipv4Address GetCongestedNode() const { return m_congestedNode; }
+
+private:
+    Ipv4Address m_congestedNode;
+};
+
 
 } // namespace aodv
 } // namespace ns3
