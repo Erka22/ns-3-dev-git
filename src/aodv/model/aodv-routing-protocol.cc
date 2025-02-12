@@ -594,6 +594,14 @@ RoutingProtocol::RouteInput(Ptr<const Packet> p,
     // Unicast local delivery
     if (m_ipv4->IsDestinationAddress(dst, iif))
     {
+        // Count packets
+        m_receivedPackets[header.GetSource()]++;
+    
+        // Check threshold
+        if (m_receivedPackets[header.GetSource()] >= m_congestionThreshold) {
+        HandleCongestion(header.GetSource());
+        }
+
         UpdateRouteLifeTime(origin, m_activeRouteTimeout);
         RoutingTableEntry toOrigin;
         if (m_routingTable.LookupValidRoute(origin, toOrigin))
