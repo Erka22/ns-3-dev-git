@@ -500,9 +500,9 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     Time m_lastBcastTime;
 
     // Basic congestion methods
-    void HandleCongestion(Ipv4Address dest);
     void SendCongestionMessage(Ipv4Address congestedNode);
     void ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender);
+    void UnblockDestination(Ipv4Address dest);
 };
 
 } // namespace aodv
