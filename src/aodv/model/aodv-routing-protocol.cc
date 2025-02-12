@@ -1244,6 +1244,12 @@ RoutingProtocol::RecvAodv(Ptr<Socket> socket)
         RecvReplyAck(sender);
         break;
     }
+    // Add this case for handling congestion messages
+    case AODVTYPE_CONGESTION:
+    {
+        ProcessCongestionMessage(packet, sender);
+        break;
+    }
     }
 }
 
@@ -2281,6 +2287,74 @@ RoutingProtocol::DoInitialize()
         m_htimer.Schedule(MilliSeconds(startTime));
     }
     Ipv4RoutingProtocol::DoInitialize();
+}
+
+// Congestion methods
+
+void
+RoutingProtocol::HandleCongestion(Ipv4Address dest)
+{
+    NS_LOG_FUNCTION(this << dest);
+    
+    // Block destination
+    m_blockedDestinations[dest] = true;
+    
+    // Send congestion notification
+    SendCongestionMessage(dest);
+    
+    // Schedule unblock after 30 seconds
+    Simulator::Schedule(Seconds(30), 
+                       &RoutingProtocol::UnblockDestination, 
+                       this, 
+                       dest);
+}
+
+void
+RoutingProtocol::SendCongestionMessage(Ipv4Address congestedNode)
+{
+    NS_LOG_FUNCTION(this << congestedNode);
+
+    CongestionHeader congHeader;
+    congHeader.SetCongestedNode(congestedNode);
+
+    Ptr<Packet> packet = Create<Packet>();
+    packet->AddHeader(congHeader);
+    
+    TypeHeader tHeader(AODVTYPE_CONGESTION);
+    packet->AddHeader(tHeader);
+
+    // Broadcast to neighbors
+    for (std::map<Ptr<Socket>, Ipv4InterfaceAddress>::const_iterator j = 
+         m_socketAddresses.begin(); j != m_socketAddresses.end(); ++j)
+    {
+        Ptr<Socket> socket = j->first;
+        socket->SendTo(packet->Copy(), 0, 
+                      InetSocketAddress(Ipv4Address::GetBroadcast(), AODV_PORT));
+    }
+}
+
+void
+RoutingProtocol::ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender)
+{
+    CongestionHeader congHeader;
+    p->RemoveHeader(congHeader);
+    
+    Ipv4Address congestedNode = congHeader.GetCongestedNode();
+    
+    // Block sending to congested destination
+    m_blockedDestinations[congestedNode] = true;
+    
+    // Schedule unblock
+    Simulator::Schedule(Seconds(30), 
+                       &RoutingProtocol::UnblockDestination, 
+                       this, 
+                       congestedNode);
+}
+
+void
+RoutingProtocol::UnblockDestination(Ipv4Address dest)
+{
+    m_blockedDestinations[dest] = false;
 }
 
 } // namespace aodv
