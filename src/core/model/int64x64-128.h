@@ -13,7 +13,23 @@
  * @ingroup highprec
  * Use uint128_t for int64x64_t implementation
  */
-#if defined(INT64X64_USE_128) && !defined(PYTHON_SCAN)
+//#if defined(INT64X64_USE_128) && !defined(PYTHON_SCAN)
+
+#if defined(HAVE___UINT128_T) && !defined(HAVE_UINT128_T)
+    #if defined(__APPLE__) && defined(__clang__)
+        #if defined(__SIZEOF_INT128__)
+            typedef __int128_t int128_t;
+            typedef unsigned __int128 uint128_t;
+        #else
+            // Fallback for Apple Clang without 128-bit integer support
+            typedef long long int int128_t;
+            typedef unsigned long long int uint128_t;
+        #endif
+    #else
+        typedef __uint128_t uint128_t;
+        typedef __int128_t int128_t;
+    #endif
+//#endif
 
 #include <cmath> // pow
 #include <stdint.h>
