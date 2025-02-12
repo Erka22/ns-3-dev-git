@@ -191,6 +191,15 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      * @return the number of stream indices assigned by this model
      */
     int64_t AssignStreams(int64_t stream);
+    /**
+     * Select the destination with the shortest path from multiple destinations
+     * 
+     * @param destinations List of potential destination IP addresses
+     * @return The IP address of the destination with the shortest path
+     */
+   
+    Ipv4Address SelectShortestPathDestination(const std::vector<Ipv4Address>& destinations);
+    void SetMultipleDestinations(const std::vector<Ipv4Address>& destinations);
 
   protected:
     void DoInitialize() override;
@@ -279,6 +288,8 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     uint16_t m_rreqCount;
     /// Number of RERRs used for RERR rate control
     uint16_t m_rerrCount;
+    std::vector<Ipv4Address> m_multipleDestinations;
+    
 
   private:
     /// Start protocol operation
@@ -487,6 +498,9 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      * @param blacklistTimeout the black list timeout time
      */
     void AckTimerExpire(Ipv4Address neighbor, Time blacklistTimeout);
+
+    // New method to calculate route cost/hop count
+    uint32_t CalculateRouteCost(const Ipv4Address& destination);
 
     /// Provides uniform random variables.
     Ptr<UniformRandomVariable> m_uniformRandomVariable;

@@ -420,9 +420,30 @@ RoutingProtocol::RouteOutput(Ptr<Packet> p,
         Ptr<Ipv4Route> route;
         return route;
     }
+    // If multiple destinations are possible, select the shortest path
+  
+
+    
+
     sockerr = Socket::ERROR_NOTERROR;
     Ptr<Ipv4Route> route;
     Ipv4Address dst = header.GetDestination();
+    // Check if multiple destinations are available
+    if (!m_multipleDestinations.empty()) {
+        // Check if the current destination is in the multiple destinations list
+        auto it = std::find(m_multipleDestinations.begin(), 
+                             m_multipleDestinations.end(), 
+                             dst);
+        
+        if (it != m_multipleDestinations.end()) {
+            // Select the destination with the shortest path
+            dst = SelectShortestPathDestination(m_multipleDestinations);
+            
+            // Update the header's destination
+            Ipv4Header updatedHeader = header;
+            updatedHeader.SetDestination(dst);
+        }
+    }
     RoutingTableEntry rt;
     if (m_routingTable.LookupValidRoute(dst, rt))
     {
@@ -2282,6 +2303,47 @@ RoutingProtocol::DoInitialize()
     }
     Ipv4RoutingProtocol::DoInitialize();
 }
+
+Ipv4Address 
+RoutingProtocol::SelectShortestPathDestination(const std::vector<Ipv4Address>& destinations)
+{
+    Ipv4Address shortestPathDest;
+    uint32_t shortestPathCost = UINT32_MAX;
+
+    for (const auto& destAddr : destinations) {
+        // Calculate route cost for each destination
+        uint32_t routeCost = CalculateRouteCost(destAddr);
+
+        // Update shortest path if a better route is found
+        if (routeCost < shortestPathCost) {
+            shortestPathCost = routeCost;
+            shortestPathDest = destAddr;
+        }
+    }
+
+    return shortestPathDest;
+}
+
+uint32_t 
+RoutingProtocol::CalculateRouteCost(const Ipv4Address& destination)
+{
+    // Look up the routing table entry for the destination
+    RoutingTableEntry route;
+    if (m_routingTable.LookupRoute(destination, route)) {
+        // Return the hop count as the route cost
+        return route.GetHop();
+    }
+
+    // If no route is found, return maximum cost
+    return UINT32_MAX;
+}
+
+void
+RoutingProtocol::SetMultipleDestinations(const std::vector<Ipv4Address>& destinations)
+{
+    m_multipleDestinations = destinations;
+}
+
 
 } // namespace aodv
 } // namespace ns3
