@@ -280,6 +280,12 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     /// Number of RERRs used for RERR rate control
     uint16_t m_rerrCount;
 
+    // For congestion control
+    uint32_t m_congestionThreshold;
+    std::map<Ipv4Address, uint32_t> m_receivedPackets;
+    std::map<Ipv4Address, bool> m_blockedDestinations;
+
+
   private:
     /// Start protocol operation
     void Start();
@@ -492,6 +498,11 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     Ptr<UniformRandomVariable> m_uniformRandomVariable;
     /// Keep track of the last bcast time
     Time m_lastBcastTime;
+
+    // Basic congestion methods
+    void HandleCongestion(Ipv4Address dest);
+    void SendCongestionMessage(Ipv4Address congestedNode);
+    void ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender);
 };
 
 } // namespace aodv
