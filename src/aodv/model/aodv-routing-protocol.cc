@@ -164,10 +164,11 @@ RoutingProtocol::RoutingProtocol()
       m_nb(m_helloInterval),
       m_rreqCount(0),
       m_rerrCount(0),
+      m_congestionBroadcastId (0),  // Initialize congestion broadcast ID
       m_htimer(Timer::CANCEL_ON_DESTROY),
       m_rreqRateLimitTimer(Timer::CANCEL_ON_DESTROY),
       m_rerrRateLimitTimer(Timer::CANCEL_ON_DESTROY),
-      m_lastBcastTime()
+      m_lastBcastTime()   
 {
     m_nb.SetCallback(MakeCallback(&RoutingProtocol::SendRerrWhenBreaksLinkToNextHop, this));
 }
@@ -591,15 +592,34 @@ RoutingProtocol::RouteInput(Ptr<const Packet> p,
         }
     }
 
-    // Unicast local delivery
-    if (m_ipv4->IsDestinationAddress(dst, iif))
-    {
-        // Count packets
-        m_receivedPackets[header.GetSource()]++;
-    
-        // Check threshold
-        if (m_receivedPackets[header.GetSource()] >= m_congestionThreshold) {
-        HandleCongestion(header.GetSource());
+        // Unicast local delivery
+        if (m_ipv4->IsDestinationAddress(dst, iif))
+        {
+                // Handle packet arrival
+            if (!HandlePacketArrival(p, header))
+            {
+            // Storage is full, send congestion message
+            CongestionHeader cgst;
+            cgst.SetCongestedNode(m_ipv4->GetAddress(1, 0).GetLocal());
+            cgst.SetBroadcastId(GetNextBroadcastId());
+            cgst.SetOriginSeqno(m_seqNo);
+
+            Ptr<Packet> packet = Create<Packet>();
+            TypeHeader tHeader(AODVTYPE_CONGESTION);
+            packet->AddHeader(cgst);
+            packet->AddHeader(tHeader);
+
+            // Broadcast congestion message
+            for (std::map<Ptr<Socket>, Ipv4InterfaceAddress>::const_iterator i = 
+                m_socketAddresses.begin(); i != m_socketAddresses.end(); ++i)
+            {
+                Ptr<Socket> socket = i->first;
+                Ipv4InterfaceAddress iface = i->second;
+                socket->SendTo(packet->Copy(), 0, 
+                            InetSocketAddress(iface.GetBroadcast(), AODV_PORT));
+            }
+
+            return false;  // Drop packet
         }
 
         UpdateRouteLifeTime(origin, m_activeRouteTimeout);
@@ -1255,7 +1275,7 @@ RoutingProtocol::RecvAodv(Ptr<Socket> socket)
     // Add this case for handling congestion messages
     case AODVTYPE_CONGESTION:
     {
-        ProcessCongestionMessage(packet, sender);
+        RecvCongestion(packet, sender);
         break;
     }
     }
@@ -2298,72 +2318,71 @@ RoutingProtocol::DoInitialize()
 }
 
 // Congestion methods
-
-void
-RoutingProtocol::HandleCongestion(Ipv4Address dest)
-{
-    NS_LOG_FUNCTION(this << dest);
-    
-    // Block destination
-    m_blockedDestinations[dest] = true;
-    
-    // Send congestion notification
-    SendCongestionMessage(dest);
-    
-    // Schedule unblock after 30 seconds
-    Simulator::Schedule(Seconds(30), 
-                       &RoutingProtocol::UnblockDestination, 
-                       this, 
-                       dest);
-}
-
-void
-RoutingProtocol::SendCongestionMessage(Ipv4Address congestedNode)
-{
-    NS_LOG_FUNCTION(this << congestedNode);
-
-    CongestionHeader congHeader;
-    congHeader.SetCongestedNode(congestedNode);
-
-    Ptr<Packet> packet = Create<Packet>();
-    packet->AddHeader(congHeader);
-    
-    TypeHeader tHeader(AODVTYPE_CONGESTION);
-    packet->AddHeader(tHeader);
-
-    // Broadcast to neighbors
-    for (std::map<Ptr<Socket>, Ipv4InterfaceAddress>::const_iterator j = 
-         m_socketAddresses.begin(); j != m_socketAddresses.end(); ++j)
+    bool
+    RoutingProtocol::IsStorageFull() const
     {
-        Ptr<Socket> socket = j->first;
-        socket->SendTo(packet->Copy(), 0, 
-                      InetSocketAddress(Ipv4Address::GetBroadcast(), AODV_PORT));
+    return m_storageStats.receivedPackets >= MAX_STORAGE_PACKETS;
     }
-}
 
-void
-RoutingProtocol::ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender)
-{
-    CongestionHeader congHeader;
-    p->RemoveHeader(congHeader);
-    
-    Ipv4Address congestedNode = congHeader.GetCongestedNode();
-    
-    // Block sending to congested destination
-    m_blockedDestinations[congestedNode] = true;
-    
-    // Schedule unblock
-    Simulator::Schedule(Seconds(30), 
-                       &RoutingProtocol::UnblockDestination, 
-                       this, 
-                       congestedNode);
-}
+    bool
+    RoutingProtocol::HandlePacketArrival(Ptr<const Packet> p, const Ipv4Header &header)
+    {
+    // First packet received
+    if (m_storageStats.receivedPackets == 0)
+    {
+        m_storageStats.firstPacketTime = Simulator::Now();
+    }
 
-void
-RoutingProtocol::UnblockDestination(Ipv4Address dest)
-{
-    m_blockedDestinations[dest] = false;
-}
+    // Check if storage is full
+    if (IsStorageFull())
+    {
+        if (!m_storageStats.isFull)
+        {
+        // First time storage becomes full
+        m_storageStats.isFull = true;
+        m_storageStats.storageFullTime = Simulator::Now();
+
+        NS_LOG_INFO("Node " << m_ipv4->GetObject<Node>()->GetId() 
+                    << ": Storage full after " 
+                    << (m_storageStats.storageFullTime - m_storageStats.firstPacketTime).GetSeconds() 
+                    << " seconds");
+        }
+
+        m_storageStats.droppedPackets++;
+        return false;
+    }
+
+    m_storageStats.receivedPackets++;
+    return true;
+    }
+
+    void
+    RoutingProtocol::RecvCongestion(Ptr<Packet> p, Ipv4Address sender)
+    {
+    NS_LOG_FUNCTION(this << " from " << sender);
+
+    CongestionHeader cgstHeader;
+    p->RemoveHeader(cgstHeader);
+    
+    Ipv4Address congestedNode = cgstHeader.GetCongestedNode();
+    
+    // Find and invalidate route to congested node
+    RoutingTableEntry toDst;
+    if (m_routingTable.LookupRoute(congestedNode, toDst))
+    {
+        toDst.SetFlag(INVALID);
+        toDst.SetLifeTime(Seconds(0));
+        m_routingTable.Update(toDst);
+        
+        NS_LOG_DEBUG("Route to " << congestedNode << " invalidated due to congestion");
+    }
+    }
+
+
+
+
+
+
 
 } // namespace aodv
 } // namespace ns3

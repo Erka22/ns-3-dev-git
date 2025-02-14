@@ -39,6 +39,22 @@ enum WifiMacDropReason : uint8_t; // opaque enum declaration
 
 namespace aodv
 {
+
+/// Storage statistics structure
+struct StorageStats
+{
+  uint32_t receivedPackets;  ///< Total packets received
+  uint32_t droppedPackets;   ///< Packets dropped due to full storage
+  Time firstPacketTime;      ///< Time of first packet arrival
+  Time storageFullTime;      ///< Time when storage became full
+  bool isFull;              ///< Storage full flag
+
+  /// Constructor
+  StorageStats() : 
+    receivedPackets(0),
+    droppedPackets(0),
+    isFull(false) {}
+};
 /**
  * @ingroup aodv
  *
@@ -109,6 +125,8 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      * @param len the maximum queue length
      */
     void SetMaxQueueLen(uint32_t len);
+
+    uint32_t GetSize() const { return m_currentSize; }
 
     /**
      * Get destination only flag
@@ -192,6 +210,12 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      */
     int64_t AssignStreams(int64_t stream);
 
+      /**
+    * \brief Get storage statistics
+    * \returns const reference to storage stats
+    */
+    const StorageStats& GetStorageStats() const { return m_storageStats; }
+
   protected:
     void DoInitialize() override;
 
@@ -244,6 +268,7 @@ class RoutingProtocol : public Ipv4RoutingProtocol
                              ///< buffer.
     Time m_maxQueueTime;     ///< The maximum period of time that a routing protocol is allowed to
                              ///< buffer a packet for.
+    uint32_t m_currentSize;  // Current size in bytes
     bool m_destinationOnly;  ///< Indicates only the destination may respond to this RREQ.
     bool m_gratuitousReply;  ///< Indicates whether a gratuitous RREP should be unicast to the node
                              ///< originated route discovery.
@@ -281,9 +306,15 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     uint16_t m_rerrCount;
 
     // For congestion control
-    uint32_t m_congestionThreshold;
-    std::map<Ipv4Address, uint32_t> m_receivedPackets;
-    std::map<Ipv4Address, bool> m_blockedDestinations;
+    /// Maximum number of packets a destination can receive
+    static const uint32_t MAX_STORAGE_PACKETS = 1000;
+
+    /// Storage statistics instance
+    StorageStats m_storageStats;
+    /// Broadcast ID for congestion messages
+    uint32_t m_congestionBroadcastId;
+
+
 
 
   private:
@@ -500,11 +531,38 @@ class RoutingProtocol : public Ipv4RoutingProtocol
     Time m_lastBcastTime;
 
     // Basic congestion methods
-    void HandleCongestion(Ipv4Address dest);
-    void SendCongestionMessage(Ipv4Address congestedNode);
-    void ProcessCongestionMessage(Ptr<Packet> p, Ipv4Address sender);
-    void UnblockDestination(Ipv4Address dest);
-};
+    /**
+     * \brief Get next broadcast ID for congestion messages
+     * \returns broadcast ID
+     */
+    uint32_t GetNextBroadcastId()
+    {
+        m_congestionBroadcastId++;
+        return m_congestionBroadcastId;
+    }
+
+    /**
+     * \brief Check if storage is full
+     * \returns true if storage is full
+     */
+    bool IsStorageFull() const;
+
+    /**
+     * \brief Handle packet arrival at destination
+     * \param p received packet
+     * \param header IPv4 header
+     * \returns true if packet can be accepted
+     */
+    bool HandlePacketArrival(Ptr<const Packet> p, const Ipv4Header &header);
+
+    /**
+     * \brief Receive AODV Congestion Message
+     * \param p received packet
+     * \param sender sender address of CGST message
+     */
+    void RecvCongestion(Ptr<Packet> p, Ipv4Address sender);
+
+    };
 
 } // namespace aodv
 } // namespace ns3
