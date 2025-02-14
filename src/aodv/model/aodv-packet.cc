@@ -678,6 +678,8 @@ operator<<(std::ostream& os, const RerrHeader& h)
 NS_OBJECT_ENSURE_REGISTERED(CongestionHeader);
 
 CongestionHeader::CongestionHeader()
+                    : m_broadcastId (0),
+                    m_originSeqno (0)
 {
 }
 
@@ -700,27 +702,38 @@ CongestionHeader::GetInstanceTypeId() const
 uint32_t
 CongestionHeader::GetSerializedSize() const
 {
-    // Just Ipv4Address size (4 bytes)
-    return sizeof(Ipv4Address);
+    // Size: IPv4 address (4 bytes) + broadcast ID (4 bytes) + sequence number (4 bytes)
+    return 12;
 }
 
 void
-CongestionHeader::Serialize(Buffer::Iterator start) const
+CongestionHeader::Serialize(Buffer::Iterator i) const
 {
-    WriteTo(start, m_congestedNode);
+    WriteTo (i, m_congestedNode);
+    i.WriteHtonU32 (m_broadcastId);
+    i.WriteHtonU32 (m_originSeqno);
 }
 
 uint32_t
 CongestionHeader::Deserialize(Buffer::Iterator start)
 {
-    ReadFrom(start, m_congestedNode);
-    return GetSerializedSize();
+    Buffer::Iterator i = start;
+
+    ReadFrom (i, m_congestedNode);
+    m_broadcastId = i.ReadNtohU32 ();
+    m_originSeqno = i.ReadNtohU32 ();
+
+    uint32_t dist = i.GetDistanceFrom (start);
+    NS_ASSERT (dist == GetSerializedSize ());
+    return dist;
 }
 
 void
 CongestionHeader::Print(std::ostream& os) const
 {
-    os << "CongestionHeader: Congested Node: " << m_congestedNode;
+    os << "Congestion Message - Congested Node: " << m_congestedNode
+     << " Broadcast ID: " << m_broadcastId
+     << " Origin Sequence Number: " << m_originSeqno;
 }
 
 std::ostream&

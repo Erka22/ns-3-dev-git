@@ -39,7 +39,7 @@ enum MessageType
     AODVTYPE_RREP = 2,    //!< AODVTYPE_RREP
     AODVTYPE_RERR = 3,    //!< AODVTYPE_RERR
     AODVTYPE_RREP_ACK = 4, //!< AODVTYPE_RREP_ACK
-    AODVTYPE_CONGESTION = 5  // Add this line
+    AODVTYPE_CONGESTION = 5  // AODV Congestion Message
 };
 
 /**
@@ -666,12 +666,21 @@ public:
     virtual uint32_t Deserialize(Buffer::Iterator start);
     virtual void Print(std::ostream &os) const;
 
-    // Simple setters and getters
-    void SetCongestedNode(Ipv4Address node) { m_congestedNode = node; }
-    Ipv4Address GetCongestedNode() const { return m_congestedNode; }
+     // Getters and setters for congestion message fields
+    void SetCongestedNode (Ipv4Address addr) { m_congestedNode = addr; }
+    Ipv4Address GetCongestedNode () const { return m_congestedNode; }
+
+    void SetBroadcastId (uint32_t id) { m_broadcastId = id; }
+    uint32_t GetBroadcastId () const { return m_broadcastId; }
+
+    void SetOriginSeqno (uint32_t s) { m_originSeqno = s; }
+    uint32_t GetOriginSeqno () const { return m_originSeqno; }
+
 
 private:
-    Ipv4Address m_congestedNode;
+      Ipv4Address m_congestedNode;  ///< Address of congested node
+      uint32_t m_broadcastId;       ///< Broadcast ID
+      uint32_t m_originSeqno;       ///< Origin sequence number
 };
 
 
