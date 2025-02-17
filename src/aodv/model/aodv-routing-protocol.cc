@@ -595,6 +595,7 @@ RoutingProtocol::RouteInput(Ptr<const Packet> p,
         // Unicast local delivery
         if (m_ipv4->IsDestinationAddress(dst, iif))
         {
+           
                 // Handle packet arrival
             if (!HandlePacketArrival(p, header))
             {
@@ -621,6 +622,7 @@ RoutingProtocol::RouteInput(Ptr<const Packet> p,
 
             return false;  // Drop packet
         }
+
 
         UpdateRouteLifeTime(origin, m_activeRouteTimeout);
         RoutingTableEntry toOrigin;
@@ -2327,6 +2329,7 @@ RoutingProtocol::DoInitialize()
     bool
     RoutingProtocol::HandlePacketArrival(Ptr<const Packet> p, const Ipv4Header &header)
     {
+    
     // First packet received
     if (m_storageStats.receivedPackets == 0)
     {
@@ -2346,6 +2349,7 @@ RoutingProtocol::DoInitialize()
                     << ": Storage full after " 
                     << (m_storageStats.storageFullTime - m_storageStats.firstPacketTime).GetSeconds() 
                     << " seconds");
+        PrintStorageStats();
         }
 
         m_storageStats.droppedPackets++;
@@ -2353,6 +2357,7 @@ RoutingProtocol::DoInitialize()
     }
 
     m_storageStats.receivedPackets++;
+  
     return true;
     }
 
@@ -2378,11 +2383,22 @@ RoutingProtocol::DoInitialize()
     }
     }
 
+    void
+    RoutingProtocol::PrintStorageStats()
+    {
+    NS_LOG_INFO("Storage Statistics at " << Simulator::Now().GetSeconds() << "s");
+    NS_LOG_INFO("Node: " << m_ipv4->GetAddress(1, 0).GetLocal());
+    
+    // Unicast statistics
+    NS_LOG_INFO("Unicast packets: " << m_storageStats.receivedPackets);
 
-
-
-
-
+    if (m_storageStats.receivedPackets > 0)
+    {
+        Time unicastDuration = m_storageStats.storageFullTime - m_storageStats.firstPacketTime;
+        NS_LOG_INFO("Unicast duration: " << unicastDuration.GetSeconds() << "s");
+    }
+    
+    }
 
 } // namespace aodv
 } // namespace ns3

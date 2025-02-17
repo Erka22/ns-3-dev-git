@@ -554,6 +554,7 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      * \returns true if packet can be accepted
      */
     bool HandlePacketArrival(Ptr<const Packet> p, const Ipv4Header &header);
+    
 
     /**
      * \brief Receive AODV Congestion Message
@@ -561,6 +562,7 @@ class RoutingProtocol : public Ipv4RoutingProtocol
      * \param sender sender address of CGST message
      */
     void RecvCongestion(Ptr<Packet> p, Ipv4Address sender);
+    void PrintStorageStats();
 
     };
 
