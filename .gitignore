@@ -14,6 +14,7 @@
 *.pcap
 *.plt
 *.routes
+*.xml
 *.tr
 [D|U]l[A-Z][a-z]*Stats.txt
 
